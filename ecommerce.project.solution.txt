@@ -1,0 +1,173 @@
+# Get the time range between which the orders were placed. 
+SELECT 
+MIN(order_purchase_timestamp) AS start_time
+,MAX(order_purchase_timestamp) AS end_time
+FROM `ecommerce_project.orders_dataset`
+
+# Display the Cities & States of customers during the given period.
+
+SELECT
+ ods.order_id
+, ods.customer_id
+,ctm.customer_city
+,ctm.customer_state
+FROM `ecommerce_project.orders_dataset` AS ods
+LEFT JOIN `ecommerce_project.customers_dataset` as ctm
+ON ods.customer_id = ctm.customer_id
+WHERE EXTRACT(YEAR FROM ods.order_purchase_timestamp) = 2018
+AND EXTRACT (MONTH FROM ods.order_purchase_timestamp) BETWEEN 1 AND 3
+
+# Is there a growing trend in the no. of orders placed over the past year? 
+
+SELECT 
+EXTRACT (MONTH FROM order_purchase_timestamp) AS month
+,COUNT(order_id) AS total_orders
+FROM `ecommerce_project.orders_dataset`
+GROUP BY month
+ORDER BY total_orders DESC
+
+# During what time of the day, do the Brazilians customers mostly place their orders? (Dawn, Morning, Afternoon or Night)
+0-6: Dawn
+7-12: Mornings
+13 - 18: Afternoon
+19-23: Night
+
+SELECT 
+  CASE 
+    WHEN EXTRACT(HOUR FROM order_purchase_timestamp) BETWEEN 0 AND 6  THEN 'Dawn'
+    WHEN EXTRACT(HOUR FROM order_purchase_timestamp) BETWEEN 7 AND 12 THEN 'Morning'
+    WHEN EXTRACT(HOUR FROM order_purchase_timestamp) BETWEEN 13 AND 18 THEN 'Afternoon'
+    WHEN EXTRACT(HOUR FROM order_purchase_timestamp) BETWEEN 19 AND 23 THEN 'Night'
+  END AS time_of_day,
+  COUNT(order_id) AS total_orders
+FROM `ecommerce_project.orders_dataset`
+GROUP BY time_of_day
+ORDER BY total_orders DESC;
+
+# Get month on month number of orders. 
+
+SELECT 
+EXTRACT (MONTH FROM order_purchase_timestamp) AS month
+,EXTRACT (YEAR FROM order_purchase_timestamp) AS year
+,COUNT(order_id) AS total_orders
+FROM `ecommerce_project.orders_dataset`
+GROUP BY year, month
+ORDER BY year, month
+
+# Distribution of customers across the states of Brazil.
+
+SELECT
+customer_state
+,COUNT(DISTINCT customer_id) AS total_customer
+FROM `ecommerce_project.customers_dataset`
+GROUP BY customer_state
+ORDER BY total_customer DESC
+
+# Get the % increase in the cost of orders from year 2017 to 2018 (include months between JAN to Aug only).
+
+#SETP 1: Calculate total payments per year
+WITH yearly_total as (
+SELECT SUM(pay.payment_value) as total_payment
+,EXTRACT (YEAR FROM ord.order_purchase_timestamp) AS year_orders
+FROM `ecommerce_project.orders_dataset` AS ord
+LEFT JOIN `ecommerce_project.orders_payments` pay
+ON ord.order_id = pay.order_id
+WHERE EXTRACT (YEAR FROM ord.order_purchase_timestamp) IN (2017,2018)
+AND EXTRACT (MONTH FROM ord.order_purchase_timestamp) BETWEEN 1 AND 8
+GROUP BY EXTRACT (YEAR FROM ord.order_purchase_timestamp) )
+
+#STEP 2: Use LEAD window function to compare each year´s payments with the previous year.
+
+ , yearly_comparison AS (
+    SELECT
+        year_orders
+        ,total_payment
+        ,LEAD(total_payment) OVER (ORDER BY year_orders DESC) AS prev_year_payment
+    FROM yearly_total
+)
+ 
+
+#STEP 3: Calculate % increase
+
+SELECT
+    year_orders
+    ,total_payment
+    prev_year_payment
+    ,ROUND(
+        ((total_payment - prev_year_payment) / prev_year_payment) * 100,
+        2
+    ) AS increased_perc
+FROM yearly_comparison
+
+# MEAN & SUM of price and frieght value by customer state;
+
+SELECT
+c.customer_state
+,AVG(oi.price) AS avg_price
+,SUM(oi.price) AS sum_price
+,AVG(oi.freight_value) AS avg_freight
+,SUM(oi.freight_value) AS sum_price
+FROM `ecommerce_project.orders_dataset` AS o
+JOIN `ecommerce_project.orders_items` AS oi
+ON o.order_id = oi.order_id
+JOIN  `ecommerce_project.customers_dataset`AS C
+ON o.customer_id = C.customer_id
+GROUP BY C.customer_state
+
+# Calculate days between purchasing, delivering and estimated delivery.
+
+SELECT 
+order_id
+,DATE_DIFF(order_delivered_customer_date, order_purchase_timestamp, DAY) AS days_to_deliver
+,DATE_DIFF(order_delivered_customer_date,order_estimated_delivery_date, DAY) AS estimated_delivery
+FROM `ecommerce_project.orders_dataset`
+
+# Find out top 5 states with the highest average freight value.
+
+
+SELECT
+c.customer_state
+,AVG(oi.freight_value) AS avg_freight
+FROM `ecommerce_project.orders_dataset` AS o
+JOIN `ecommerce_project.orders_items` AS oi
+ON o.order_id = oi.order_id
+JOIN  `ecommerce_project.customers_dataset`AS C
+ON o.customer_id = C.customer_id
+GROUP BY C.customer_state
+ORDER BY avg_freight DESC
+LIMIT 5
+
+# Find out top 5 states with the highest average delivery time.
+
+SELECT
+c.customer_state
+,AVG(EXTRACT(DATE from o.order_delivered_customer_date) - EXTRACT (DATE from o.order_purchase_timestamp)) AS avg_time_to_delivery
+FROM `ecommerce_project.orders_dataset` AS o
+JOIN `ecommerce_project.orders_items` AS oi
+ON o.order_id = oi.order_id
+JOIN  `ecommerce_project.customers_dataset`AS C
+ON o.customer_id = C.customer_id
+GROUP BY c.customer_state
+ORDER BY avg_time_to_delivery DESC
+LIMIT 5
+
+# Find the month on month no. of orders placed using different payment types.
+
+SELECT 
+ pay.payment_type
+ ,EXTRACT (YEAR FROM o.order_purchase_timestamp) AS year_orders
+ ,EXTRACT (MONTH FROM o.order_purchase_timestamp) AS month_orders
+,COUNT(DISTINCT o.order_id) as order_count
+FROM `ecommerce_project.orders_dataset` AS o
+LEFT JOIN `ecommerce_project.orders_payments` as pay
+ON o.order_id = pay.order_id
+GROUP BY pay.payment_type, year_orders,month_orders
+ORDER BY pay.payment_type, year_orders,month_orders
+
+# Count of orders based on the number of payment installments.
+
+SELECT 
+payment_installments
+,COUNT(DISTINCT order_id) as order_count
+FROM `ecommerce_project.orders_payments`
+GROUP BY payment_installments
