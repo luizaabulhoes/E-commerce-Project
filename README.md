@@ -5,6 +5,15 @@ This project aims to analyze Target’s e-commerce data to extract insights and 
 
 ---
 
+## Dataset Source
+
+The dataset used for this analysis can be accessed via Google Drive:
+👉 [E-commerce Dataset Folder](https://drive.google.com/drive/folders/1K2uTG0kpPqZ65PhVhQNTFgyfEqES_dWt)
+
+Please download the files and place them in the `data/` directory before running the analysis.
+
+---
+
 ## Exploratory Analysis Steps
 
 1. **Dataset Structure and Data Types**
